@@ -5,5 +5,191 @@
 </head>
 <body>
 <p>this space intentionally left blank</p>
+<button style="background-color: #CCC; padding: 1rem;">click me</button>
+<script>
+  /*
+** thumpButton(btn)
+** btn should be reference to the button to
+** make into a thump button
+*/
+function thumpButton(btn) {
+    /* env is a list of parameters that
+       affect the pitch of the thump
+      and whether the thump is reversed */
+    let env = { 
+        startVol: 1, 
+        endVol: 0, 
+        pitchMod: 1, 
+        note: 98,
+        reverse: function() {
+          let x = env.startVol;
+          env.startVol = env.endVol;
+          env.endVol = x;
+      }
+    }
+
+    /* web audio stuff */
+    const AudioContext = window.AudioContext || window.webkitAudioContext;
+    const audioCtx = new AudioContext();
+
+    /* switch that keeps track of whether the mouse 
+       is inside the button or not */
+    let inRange = false;
+
+    // returns an object that can play a thump
+    // at a certain pitch p
+    function playNote(p) {
+        return { 
+            down: function() { playThump(audioCtx, env, p) },
+            up: function() {}
+        };
+    }
+
+    // returns an object that modifies
+    // the env pitchMod value
+    function pitchMod(oct) {
+        return {
+            down: function() { env.pitchMod = Math.pow(2, oct) },
+            up: function() { env.pitchMod = 1 }
+        }
+    }
+
+    /* maps different keyCodes to different functionality
+       the string key is the key code, found in event.code,
+       and the value for each key is an object containing two
+       function, down and up, that are triggered on keydown
+       and keyup respectively, for the key associated with the
+       key code */
+
+    let fnMap = {
+        /* lays the notes of the G scale out across the home row, in the
+           first octave. each note is in hertz, which I got from http://pages.mtu.edu/~suits/notefreqs.html */
+        'KeyQ': playNote(98),
+        'KeyW': playNote(110),
+        'KeyE': playNote(123.47),
+        'KeyR': playNote(130.81),
+        'KeyT': playNote(146.83),
+        'KeyY': playNote(164.81),
+        'KeyU': playNote(185.00),
+        'KeyI': playNote(196.00),
+        /* while the shift key is held down, activate the reverse effect */
+        'ShiftLeft': {
+            down: env.reverse.bind(env),
+            up: env.reverse.bind(env)
+        },
+        /* each number corresponds to a pitchMod factor. This factor scales the pitch
+           hertz value by 2^n, where n is the associated digit. This lets you play
+           the G scale in different octaves */
+        'Digit1': pitchMod(1),
+        'Digit2': pitchMod(2),
+        'Digit3': pitchMod(3),
+        'Digit4': pitchMod(4),
+        'Digit5': pitchMod(5),
+        'Digit6': pitchMod(6),
+        'Digit7': pitchMod(7),
+        'Digit8': pitchMod(8),
+        'Digit9': pitchMod(9),
+        'Digit0': pitchMod(10),
+    }
+
+
+
+    window.addEventListener('keydown', function(ev) {
+        // trigger the appropriate key action
+        // only when the mouse is inside the button
+        if (inRange && fnMap[ev.code]) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            fnMap[ev.code].down();
+        }
+    })
+
+    window.addEventListener('keyup', function(ev) {
+        // it's ok to clean up even after the mouse has left
+        if (fnMap[ev.code]) {
+            ev.preventDefault();
+            ev.stopPropagation();
+            fnMap[ev.code].up();
+        }
+    });
+
+    let timeouts = [];
+
+    function buttonTextTimeout(text, duration) {
+        timeouts.push(setTimeout(function() {
+            btn.innerText = text;
+        }, duration))
+    }
+
+    // basic, boring, entry level
+    // thumping on click
+    btn.addEventListener('mousedown', function(ev) {
+        ev.stopPropagation();
+        ev.preventDefault();
+        playThump(audioCtx, env, 98);
+    });
+
+    // gradually reveal the buttons over time
+    btn.addEventListener('mouseover', function() {
+        inRange = true;
+        btn.innerText = "works better with headphones";
+        buttonTextTimeout("try pressing a top row letter", 2000);
+        buttonTextTimeout("try holding a number while playing", 5000);
+        buttonTextTimeout("try holding left Shift while playing", 9000);
+    });
+
+    btn.addEventListener('mouseout', function() {
+        inRange = false;
+
+        btn.innerText = "click to make a thumpy sound"
+
+        // clear out the button text timeouts when the mouse exits
+        timeouts.map(function(t) { clearTimeout(t) });
+        timeouts = []
+    });
+
+    // disable the button's context menu
+    btn.addEventListener('contextmenu', function(ev) { 
+        ev.preventDefault();
+        return false; 
+    });
+}
+  
+/* 
+** playThump()
+** plays the thump
+** ctx is the Web Audio Context
+** env, the settings that effect
+** the thump's length, pitch, and
+** whether the reverse effect is applied
+** pitch is the Hz value of the pitch to play
+** in the first octave
+*/
+function playThump(ctx, env, pitch) {
+    const osc = ctx.createOscillator();
+    osc.type = 'sine';
+    osc.frequency.setValueAtTime(pitch * env.pitchMod, ctx.currentTime); // sets the note value in Hz
+
+    // makes the thump sound by detuning the beginning of the thump
+    // like an 808
+    osc.detune.setValueAtTime(-250, ctx.currentTime);
+    osc.detune.linearRampToValueAtTime(0, ctx.currentTime + 0.15);
+
+    let sweepEnv = ctx.createGain();
+    sweepEnv.gain.cancelScheduledValues(ctx.currentTime);
+
+    // when startVol = 1 and endVol = 0, creates a decay sound (good for thumping)
+    // when startVol = 0 and endVol = 1, creates a reverse sound (good for reverse thumping)
+    sweepEnv.gain.setValueAtTime(env.startVol, ctx.currentTime);
+    sweepEnv.gain.linearRampToValueAtTime(env.endVol, ctx.currentTime + 0.5);
+
+    osc.connect(sweepEnv).connect(ctx.destination);
+    osc.start();
+    // the entire sound lasts a half a second
+    // it's a thump, not a thud
+    osc.stop(ctx.currentTime + 0.5)
+}
+thumpButton(document.querySelector("button"));
+</script>
 </body>
 </html>
