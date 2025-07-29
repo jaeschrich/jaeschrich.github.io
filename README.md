@@ -1,2 +1,2 @@
-# bvirus.github.io
+# jaeschrich.github.io
 personal website
