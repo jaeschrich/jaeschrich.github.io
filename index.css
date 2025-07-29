@@ -1,7 +1,7 @@
 @import "tailwindcss";
 
 h3 { @apply text-xl font-bold; }
-a { @apply text-cyan-300 underline; }
+a { @apply text-sky-300 underline; }
 strong { @apply font-bold; }
 .highlight { @apply bg-pink-500; }
 
