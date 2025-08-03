@@ -5,3 +5,4 @@ a { @apply text-sky-300 underline; }
 strong { @apply font-bold; }
 .highlight { @apply bg-pink-500; }
 
+* { box-sizing: border-box; }
